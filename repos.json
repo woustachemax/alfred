@@ -1,0 +1,7 @@
+{
+  "acme-freelance": { "ownerOnly": true },
+
+  "_comment_exclude_example": "to hide an auto-discovered folder entirely, set it to false: \"scratch-repo\": false",
+
+  "_comment_external_example": "to add a repo that lives outside CODE_DIR: \"other-project\": { \"path\": \"/some/other/path\" }"
+}
