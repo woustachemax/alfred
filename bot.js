@@ -5,26 +5,16 @@ const TelegramBot = require('node-telegram-bot-api');
 const { spawn } = require('child_process');
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-// One or more base folders to scan, comma-separated — e.g. your code folder and
-// Priyanka's. Every immediate subfolder with a .git in it, in any of them, becomes
-// a usable repo under its own folder name. No repo has to physically live in any
-// one person's directory for anyone else to reach it.
+
 const CODE_DIRS = (process.env.CODE_DIRS || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
-// repos.json is now optional and only for exceptions: mark an auto-discovered repo
-// ownerOnly, exclude one you don't want reachable, or add a path outside CODE_DIRS.
 const REPOS_CONFIG_PATH = process.env.REPOS_CONFIG_PATH || path.join(__dirname, 'repos.json');
 const ALLOWED_CHAT_IDS = (process.env.ALLOWED_CHAT_IDS || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
-// Telegram user IDs of everyone with owner-level trust — you, and anyone else you
-// trust the same way (e.g. a co-owner). All still run through this one Claude Code
-// login on the server; owner status is a permissions label, not a separate account.
-// Gates ownerOnly repos to this list, and is where the bot sends a quiet copy of
-// every non-owner-triggered result. In a private DM with the bot, chat ID == user ID.
 const OWNER_IDS = (process.env.OWNER_IDS || '')
   .split(',')
   .map(s => s.trim())
@@ -40,7 +30,7 @@ if (!TOKEN) {
 }
 
 function discoverRepos() {
-  const found = {};
+  const found  =  {};
   for (const dir of CODE_DIRS) {
     let entries;
     try {
@@ -71,11 +61,10 @@ function loadRepos() {
     overrides = JSON.parse(fs.readFileSync(REPOS_CONFIG_PATH, 'utf8'));
   } catch (err) {
     if (err.code !== 'ENOENT') console.error(`Couldn't read ${REPOS_CONFIG_PATH}:`, err.message);
-    // missing repos.json is fine — CODE_DIR discovery alone can carry the whole thing
   }
 
   for (const [name, val] of Object.entries(overrides)) {
-    if (name.startsWith('_')) continue; // lets repos.json carry "_comment"-style notes, JSON has no real comments
+    if (name.startsWith('_')) continue; 
     if (val === false || (val && val.exclude)) {
       delete merged[name];
       continue;
@@ -89,8 +78,6 @@ function loadRepos() {
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 
-// One job at a time, whoever asked and whichever repo — simplest way to guarantee
-// two teammates never collide on the same git working copy.
 let busy = false;
 const queue = [];
 
@@ -129,7 +116,7 @@ function run(cmd, args, cwd) {
 }
 
 function isAllowed(chatId) {
-  if (ALLOWED_CHAT_IDS.length === 0) return true; // open by default if unset — lock this down before real use
+  if (ALLOWED_CHAT_IDS.length === 0) return true; 
   return ALLOWED_CHAT_IDS.includes(String(chatId));
 }
 
@@ -199,9 +186,6 @@ async function handleFixRequest(chatId, requester, repoName, issueText) {
 
   let rawOutput;
   try {
-    // No --bare: bare mode never reads OAuth/subscription login, only ANTHROPIC_API_KEY.
-    // Log into `claude` once, interactively, on this server so every run — no matter who
-    // triggered it from Telegram — bills to your subscription, not a per-token API key.
     const { stdout } = await run('claude', [
       '-p', prompt,
       '--output-format', 'json',
@@ -277,17 +261,13 @@ async function handleFixRequest(chatId, requester, repoName, issueText) {
   const finalMessage = `[${repoName}] Done — asked by ${who}.\n${summary}\n\n${prUrl ? `PR: ${prUrl}` : `Branch: ${branch}`}`;
   await bot.sendMessage(chatId, finalMessage);
 
-  // Quiet copy to every other owner if someone (owner or not) triggered this from a
-  // shared/team chat — so you and Priyanka both stay across everything without
-  // watching the group live.
   for (const ownerId of OWNER_IDS) {
-    if (String(ownerId) === String(requester.id)) continue; // don't echo it back to whoever just asked
-    if (String(chatId) === String(ownerId)) continue; // already the chat that got the message
+    if (String(ownerId) === String(requester.id)) continue;
+    if (String(chatId) === String(ownerId)) continue; 
     await bot.sendMessage(ownerId, finalMessage).catch(() => {});
   }
 }
 
-// /fix <repo> <description>
 bot.onText(/^\/fix (\S+) (.+)/s, (msg, match) => {
   const chatId = msg.chat.id;
   if (!isAllowed(chatId)) {
@@ -295,6 +275,10 @@ bot.onText(/^\/fix (\S+) (.+)/s, (msg, match) => {
     return;
   }
   enqueue(() => handleFixRequest(chatId, msg.from, match[1].trim(), match[2].trim()));
+});
+
+bot.onText(/^\/chatid$/, msg => {
+  bot.sendMessage(msg.chat.id, `This chat's ID: ${msg.chat.id}`);
 });
 
 bot.onText(/^\/repos$/, msg => {
@@ -312,7 +296,7 @@ bot.onText(/^\/repos$/, msg => {
 bot.onText(/^\/start$/, msg => {
   bot.sendMessage(
     msg.chat.id,
-    "Send /fix <repo> <description> and I'll work on it in a new branch and open a PR.\nSend /repos to see which repos I know about."
+    "Send /fix <repo> <description> and I'll work on it in a new branch and open a PR.\nSend /repos to see which repos I know about.\nSend /chatid to see this chat's ID."
   );
 });
 
